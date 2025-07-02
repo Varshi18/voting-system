@@ -1,60 +1,90 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import Login from './components/Login';
-import ParticipantDashboard from './components/ParticipantDashboard';
 import JudgeDashboard from './components/JudgeDashboard';
-
-const API_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
+import ParticipantDashboard from './components/ParticipantDashboard';
+import Navbar from './components/Navbar';
+import RippleContainer from './components/RippleContainer';
+import LoadingScreen from './components/LoadingScreen';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [error, setError] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [role, setRole] = useState(localStorage.getItem('role') || '');
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [isLoading, setIsLoading] = useState({ active: true, message: 'Loading Boardroom Battles...' });
 
-  const handleLogin = async (username, password) => {
+  useEffect(() => {
+    document.documentElement.className = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    // Simulate initial load (e.g., checking localStorage)
+    const timer = setTimeout(() => {
+      setIsLoading({ active: false, message: '' });
+    }, 1500); // 1.5s delay for initial load
+    return () => clearTimeout(timer);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  const handleLogin = async (newToken, newRole) => {
+    setIsLoading({ active: true, message: 'Logging In' });
     try {
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', username, password }),
-      });
-      console.log('Response Status:', response.status);
-      console.log('Response Headers:', JSON.stringify([...response.headers]));
-      const responseText = await response.text();
-      console.log('Response Text:', responseText);
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (err) {
-        throw new Error('Invalid JSON response: ' + responseText);
-      }
-      if (data.success) {
-        setUser({ token: data.token, role: data.role });
-        setError(null);
-      } else {
-        setError(data.error || 'Login failed');
-      }
-    } catch (err) {
-      setError('Network error: ' + err.message);
-      console.error('Login Error:', err);
+      setToken(newToken);
+      setRole(newRole);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('role', newRole);
+    } finally {
+      setIsLoading({ active: false, message: '' });
     }
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setError(null);
+    setIsLoading({ active: true, message: 'Logging Out' });
+    try {
+      setToken('');
+      setRole('');
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('voteHistory');
+      localStorage.removeItem('neutralUsed');
+      localStorage.removeItem('voteCounts');
+    } finally {
+      setIsLoading({ active: false, message: '' });
+    }
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.6, ease: 'easeInOut' } }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
-      <h1 className="text-3xl font-bold mb-6">Voting System</h1>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-      {!user ? (
-        <Login onLogin={handleLogin} />
-      ) : user.role === 'judge' ? (
-        <JudgeDashboard token={user.token} onLogout={handleLogout} />
-      ) : (
-        <ParticipantDashboard token={user.token} onLogout={handleLogout} />
-      )}
-    </div>
+    <RippleContainer>
+      {isLoading.active && <LoadingScreen message={isLoading.message} />}
+      <div className="min-h-screen pt-16">
+        <Navbar theme={theme} toggleTheme={toggleTheme} />
+        <motion.div
+          className="flex items-center justify-center p-4 sm:p-6 min-h-[calc(100vh-4rem)]"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <div className="glass-card p-4 sm:p-8 rounded-lg w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-5xl">
+            {!token ? (
+              <Login onLogin={handleLogin} setIsLoading={setIsLoading} />
+            ) : role === 'judge' ? (
+              <JudgeDashboard token={token} onLogout={handleLogout} setIsLoading={setIsLoading} />
+            ) : (
+              <ParticipantDashboard token={token} onLogout={handleLogout} setIsLoading={setIsLoading} />
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </RippleContainer>
   );
 }
 
